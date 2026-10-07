@@ -1,21 +1,21 @@
 #!/usr/bin/env python3
 """
-The shop on this site, built from the live Etsy listings, for Pinterest's
-product catalogue.
+The whole site, built from the live Etsy listings: the home page, the shop,
+a page per listing, the privacy page, and catalog.csv for Pinterest.
 
 Pinterest takes a catalogue only from the website the account has claimed:
 every product's link has to be on kirwana.github.io. So each Etsy listing
 gets a page here (p/<listing id>.html: its photos, title, price and a Buy on
-Etsy button), shop.html lists them all, and catalog.csv is the feed Pinterest
-reads, in its own columns.
+Etsy button), and catalog.csv is the feed Pinterest reads.
 
 Run from this folder:  python3 tools/build_catalog.py
-It reads Etsy through Print Kit's connection (~/Projects/etsy/print-templates),
-rewrites p/, shop.html and catalog.csv, and leaves the rest of the site alone.
-Then commit and push, and Pinterest picks the feed up on its next daily read.
+It reads Etsy through Print Kit's connection (~/Projects/etsy/print-templates)
+and rewrites index.html, shop.html, privacy.html, p/ and catalog.csv. The
+images/ folder and style.css are kept as they are. tools/sync.sh runs it daily.
 """
 import csv
 import html
+import json
 import os
 import re
 import shutil
@@ -25,9 +25,17 @@ SITE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 BASE = "https://kirwana.github.io"
 SHOP = "https://www.etsy.com/shop/MirrorsFineArt"
 VERIFY = '<meta name="p:domain_verify" content="db7d2a24295a67bc265e4a4397112539"/>'
+FONTS = ('<link rel="preconnect" href="https://fonts.googleapis.com">'
+         '<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>'
+         '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1'
+         '&family=Manrope:wght@400;500;600&display=swap">')
 sys.path.insert(0, os.path.expanduser("~/Projects/etsy/print-templates"))
 import etsy_api as E  # noqa: E402
 
+KINDS = {"art": "Wall art", "set": "Wall art sets", "card": "Greeting cards"}
+
+
+# ------------------------------------------------------------------ Etsy
 
 def listings():
     sid = E.api("/users/me")["shop_id"]
@@ -39,7 +47,6 @@ def listings():
         offset += 100
         if offset >= (r.get("count") or 0):
             break
-    # their photos, a hundred at a time
     imgs = {}
     ids = [str(l["listing_id"]) for l in out]
     for i in range(0, len(ids), 100):
@@ -48,7 +55,7 @@ def listings():
             imgs[l["listing_id"]] = sorted(l.get("images") or [], key=lambda m: m.get("rank", 99))
     for l in out:
         l["images"] = imgs.get(l["listing_id"], [])
-    return out
+    return [l for l in out if l["images"]]
 
 
 def price(l):
@@ -56,99 +63,301 @@ def price(l):
     return p["amount"] / p["divisor"], p["currency_code"]
 
 
+def money(l):
+    amt, cur = price(l)
+    return ("A$%.2f" % amt) if cur == "AUD" else "%s %.2f" % (cur, amt)
+
+
 def kind(l):
     t = l["title"].lower()
-    if "card" in t:
-        return "Printable greeting card"
-    if re.search(r"\bset of \d|\bset\b", t):
-        return "Printable wall art set"
-    return "Printable wall art"
+    if re.search(r"\bcard\b", t):
+        return "card"
+    if re.search(r"\bset of \d|\bgall?e?ry set\b", t):
+        return "set"
+    return "art"
+
+
+# Shop words in Etsy titles: what a search engine wants, not a name.
+NOISE = re.compile(r"\b(printable|greeting|digital|downloads?|wall art|fine art print|art print|print|"
+                   r"black and white|black & white|b&w|monochrome|card|galle?r?y set|instant)\b", re.I)
+
+
+def names(l):
+    """(name, set size or None, other words) from an Etsy title: 'Andean Silver -
+    Andes - Peru - Set of 2' -> ('Andean Silver', 2, 'Andes · Peru')."""
+    t = html.unescape(l["title"])
+    t = re.sub(r"\(.*?\)", "", t).split(",")[0]
+    m = re.search(r"\bset of (\d+)\b", t, re.I)
+    n = int(m.group(1)) if m else None
+    t = re.sub(r"\bset of \d+\b", " - ", t, flags=re.I)
+    parts = [re.sub(r"\s{2,}", " ", NOISE.sub(" ", p)).strip(" -·") for p in re.split(r"\s+[-–—|]\s+|\s+-$", t)]
+    parts = [p for p in parts if p]
+    if not parts:
+        return html.unescape(l["title"]), n, ""
+    name = next((p for p in parts if len(p.split()) >= 2), parts[0])
+    rest = [p for p in parts if p != name]
+    return name, n, " · ".join(rest)
+
+
+def product_title(l):
+    name, n, _ = names(l)
+    k = kind(l)
+    if k == "card":
+        return "%s, printable greeting card" % name
+    if k == "set":
+        return "%s, set of %d prints" % (name, n) if n else "%s, print set" % name
+    return "%s, printable wall art" % name
 
 
 def plain(text):
     return re.sub(r"\n{3,}", "\n\n", html.unescape(text or "")).strip()
 
 
-def page(l):
-    amt, cur = price(l)
-    title = html.escape(html.unescape(l["title"]))
-    desc = plain(l.get("description"))
-    paras = "".join("<p>%s</p>" % html.escape(p).replace("\n", "<br>") for p in desc.split("\n\n")[:6])
-    photos = [m["url_fullxfull"] for m in l["images"][:5] if m.get("url_fullxfull")]
-    main = photos[0] if photos else ""
-    thumbs = "".join('<img src="%s" alt="" loading="lazy">' % html.escape(u) for u in photos[1:])
-    return """<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-%(verify)s
-<title>%(title)s · Mirrors Fine Art</title>
-<meta name="description" content="%(short)s">
-<meta property="og:type" content="product">
-<meta property="og:title" content="%(title)s">
-<meta property="og:image" content="%(main)s">
-<meta property="og:url" content="%(url)s">
-<meta property="product:price:amount" content="%(amt).2f">
-<meta property="product:price:currency" content="%(cur)s">
-<meta property="og:availability" content="instock">
-<link rel="stylesheet" href="../style.css">
-</head>
-<body>
-<main class="wrap product">
-  <p class="eyebrow"><a href="../index.html">Mirrors Fine Art</a> · <a href="../shop.html">Shop</a></p>
-  <div class="product-grid">
-    <div class="photos"><img class="main" src="%(main)s" alt="%(title)s">%(thumbs)s</div>
-    <div class="info">
-      <h1>%(title)s</h1>
-      <p class="price">%(cur)s %(amt).2f</p>
-      <p class="kind">%(kind)s · instant digital download</p>
-      <p><a class="button" href="%(etsy)s">Buy on Etsy</a></p>
-      <div class="desc">%(paras)s</div>
-    </div>
-  </div>
-</main>
-<footer class="wrap">
-  <p>© Carolina &amp; Alan, Mirrors Fine Art. All photographs are our own.</p>
-  <p><a href="../shop.html">Shop</a> · <a href="%(shop)s">Etsy shop</a> · <a href="../privacy.html">Privacy</a></p>
-</footer>
-</body>
-</html>
-""" % {"verify": VERIFY, "title": title, "short": html.escape(desc[:155]), "main": html.escape(main),
-       "url": "%s/p/%s.html" % (BASE, l["listing_id"]), "amt": amt, "cur": cur, "thumbs": thumbs,
-       "kind": kind(l), "etsy": html.escape(l["url"].split("?")[0]), "paras": paras, "shop": SHOP}
+def desc_html(text):
+    """Etsy's description as paragraphs, its ALL-CAPS lines as headings."""
+    out = []
+    for block in plain(text).split("\n\n"):
+        lines = block.split("\n")
+        if lines and re.fullmatch(r"[A-Z0-9 &'’/,.:-]{4,}", lines[0].strip()) and not re.search(r"[a-z]", lines[0]):
+            out.append("<h3>%s</h3>" % html.escape(lines[0].strip().capitalize()))
+            lines = lines[1:]
+        if not lines:
+            continue
+        if all(re.match(r"\s*[-•*✓✔]", x) for x in lines if x.strip()):
+            out.append("<ul>%s</ul>" % "".join("<li>%s</li>" % html.escape(re.sub(r"^\s*[-•*✓✔]\s*", "", x))
+                                               for x in lines if x.strip()))
+        else:
+            out.append("<p>%s</p>" % "<br>".join(html.escape(x) for x in lines))
+    return "".join(out)
 
 
-def shop_page(ls):
-    cards = []
-    for l in ls:
-        amt, cur = price(l)
-        img = l["images"][0]["url_570xN"] if l["images"] else ""
-        cards.append('<a class="card" href="p/%s.html"><img src="%s" alt="" loading="lazy"><span>%s</span><b>%s %.2f</b></a>'
-                     % (l["listing_id"], html.escape(img), html.escape(html.unescape(l["title"])), cur, amt))
+# ------------------------------------------------------------------ layout
+
+def head(title, desc, root, extra=""):
     return """<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 %s
-<title>Shop · Mirrors Fine Art</title>
-<link rel="stylesheet" href="style.css">
+<title>%s</title>
+<meta name="description" content="%s">
+%s
+<link rel="stylesheet" href="%sstyle.css">
+%s
 </head>
 <body>
-<header class="wrap">
-  <p class="eyebrow"><a href="index.html">Mirrors Fine Art</a></p>
-  <h1>Shop</h1>
-  <p class="lede">Printable wall art and greeting cards, each an instant digital download. Every piece is sold through our Etsy shop.</p>
+<header class="site-head">
+  <div class="bar">
+    <a class="mark" href="%sindex.html">Mirrors <em>Fine Art</em></a>
+    <nav>
+      <a href="%sshop.html">Shop</a>
+      <a href="%sshop.html#art">Wall art</a>
+      <a href="%sshop.html#set">Sets</a>
+      <a href="%sshop.html#card">Cards</a>
+      <a href="%sindex.html#about">About</a>
+      <a class="etsy" href="%s">Etsy</a>
+    </nav>
+  </div>
 </header>
-<main class="wrap shop">%s</main>
-<footer class="wrap">
-  <p>© Carolina &amp; Alan, Mirrors Fine Art. All photographs are our own.</p>
-  <p><a href="%s">Etsy shop</a> · <a href="privacy.html">Privacy</a></p>
+""" % (VERIFY, html.escape(title), html.escape(desc), FONTS, root, extra,
+       root, root, root, root, root, root, SHOP)
+
+
+def foot(root):
+    return """<footer class="site-foot">
+  <div class="cols">
+    <div>
+      <p class="mark">Mirrors <em>Fine Art</em></p>
+      <p>Fine art photography by Carolina &amp; Alan, Sydney. Printable wall art and greeting cards, sold through Etsy as instant downloads.</p>
+    </div>
+    <div>
+      <p class="label">Shop</p>
+      <a href="%sshop.html#art">Wall art</a><a href="%sshop.html#set">Wall art sets</a><a href="%sshop.html#card">Greeting cards</a>
+    </div>
+    <div>
+      <p class="label">About</p>
+      <a href="%sindex.html#about">Our story</a><a href="%s">Etsy shop</a><a href="%sprivacy.html">Privacy</a>
+    </div>
+  </div>
+  <p class="fine">© 2026 Carolina &amp; Alan · All photographs are our own · Orders are placed and paid securely on Etsy</p>
 </footer>
 </body>
 </html>
-""" % (VERIFY, "".join(cards), SHOP)
+""" % (root, root, root, root, SHOP, root)
+
+
+def tile(l, root=""):
+    name, n, rest = names(l)
+    img = l["images"][0].get("url_570xN") or l["images"][0]["url_fullxfull"]
+    sub = {"art": "Wall art", "card": "Greeting card"}.get(kind(l)) or ("Set of %d" % n if n else "Print set")
+    return ('<a class="tile" data-kind="%s" href="%sp/%s.html"><span class="ph"><img src="%s" alt="%s" loading="lazy"></span>'
+            '<span class="tn">%s</span><span class="tm">%s · %s</span></a>'
+            % (kind(l), root, l["listing_id"], html.escape(img), html.escape(name), html.escape(name),
+               html.escape(sub), money(l)))
+
+
+# ------------------------------------------------------------------ pages
+
+def product_page(l, related):
+    name, n, rest = names(l)
+    k = kind(l)
+    photos = [m["url_fullxfull"] for m in l["images"][:8]]
+    smalls = [m.get("url_570xN") or m["url_fullxfull"] for m in l["images"][:8]]
+    thumbs = "".join('<button type="button" data-full="%s"%s><img src="%s" alt="" loading="lazy"></button>'
+                     % (html.escape(f), ' class="on"' if i == 0 else "", html.escape(s))
+                     for i, (f, s) in enumerate(zip(photos, smalls)))
+    facts = {"art": ["Instant digital download", "High-resolution JPG files at 300 DPI",
+                     "Sizes in inches and centimetres", "Print at home or at any print shop"],
+             "set": ["Instant digital download", "%s matched prints, one file each" % (n or "Several"),
+                     "High-resolution JPG files at 300 DPI", "Print at home or at any print shop"],
+             "card": ["Instant digital download", "Print at home on A4 or US Letter card",
+                      "Print-shop PDF with bleed included", "Cut and fold guide"]}[k]
+    sub = {"art": "Printable wall art", "set": "Set of %d prints" % n if n else "Print set",
+           "card": "Printable greeting card"}[k]
+    rel = "".join(tile(x, "../") for x in related)
+    amt, cur = price(l)
+    ld = {"@context": "https://schema.org", "@type": "Product", "name": product_title(l),
+          "image": photos[:4], "description": plain(l.get("description"))[:500], "brand": {"@type": "Brand", "name": "Mirrors Fine Art"},
+          "offers": {"@type": "Offer", "price": "%.2f" % amt, "priceCurrency": cur, "availability": "https://schema.org/InStock",
+                     "url": "%s/p/%s.html" % (BASE, l["listing_id"])}}
+    extra = ('<meta property="og:type" content="product"><meta property="og:title" content="%s">'
+             '<meta property="og:image" content="%s"><meta property="og:url" content="%s/p/%s.html">'
+             '<meta property="product:price:amount" content="%.2f"><meta property="product:price:currency" content="%s">'
+             '<meta property="og:availability" content="instock"><script type="application/ld+json">%s</script>'
+             % (html.escape(product_title(l)), html.escape(photos[0]), BASE, l["listing_id"], amt, cur,
+                json.dumps(ld).replace("</", "<\\/")))
+    return head("%s · Mirrors Fine Art" % name, plain(l.get("description"))[:155], "../", extra) + """
+<main class="product">
+  <p class="crumbs"><a href="../shop.html">Shop</a> / <a href="../shop.html#%(k)s">%(kname)s</a></p>
+  <div class="pgrid">
+    <div class="viewer">
+      <div class="stage"><img id="main" src="%(main)s" alt="%(name)s"></div>
+      <div class="thumbs">%(thumbs)s</div>
+    </div>
+    <div class="buy">
+      <p class="eyebrow">%(sub)s%(rest)s</p>
+      <h1>%(name)s</h1>
+      <p class="price">%(price)s</p>
+      <a class="btn" href="%(etsy)s">Buy on Etsy</a>
+      <p class="secure">Secure checkout and instant download through Etsy.</p>
+      <ul class="facts">%(facts)s</ul>
+      <div class="desc">%(desc)s</div>
+    </div>
+  </div>
+  <section class="more">
+    <h2>More like this</h2>
+    <div class="tiles">%(rel)s</div>
+  </section>
+</main>
+<script>
+document.querySelectorAll('.thumbs button').forEach(function (b) {
+  b.addEventListener('click', function () {
+    document.getElementById('main').src = b.dataset.full;
+    document.querySelectorAll('.thumbs button').forEach(function (x) { x.classList.toggle('on', x === b); });
+  });
+});
+</script>
+""" % {"k": k, "kname": KINDS[k], "main": html.escape(photos[0]), "name": html.escape(name), "thumbs": thumbs,
+       "sub": html.escape(sub), "rest": (" · " + html.escape(rest)) if rest else "", "price": money(l),
+       "etsy": html.escape(l["url"].split("?")[0]), "facts": "".join("<li>%s</li>" % html.escape(f) for f in facts),
+       "desc": desc_html(l.get("description")), "rel": rel} + foot("../")
+
+
+def shop_page(ls):
+    counts = {k: sum(1 for l in ls if kind(l) == k) for k in KINDS}
+    chips = '<button type="button" data-k="all" class="on">All <span>%d</span></button>' % len(ls) + "".join(
+        '<button type="button" data-k="%s">%s <span>%d</span></button>' % (k, v, counts[k]) for k, v in KINDS.items())
+    return head("Shop · Mirrors Fine Art", "Printable wall art, print sets and greeting cards by Mirrors Fine Art.", "") + """
+<main class="shop">
+  <div class="shop-head">
+    <h1>Shop</h1>
+    <p>Printable wall art, matched print sets and greeting cards. Every piece is an instant download, bought securely on Etsy.</p>
+    <div class="chips" role="tablist">%s</div>
+  </div>
+  <div class="tiles" id="tiles">%s</div>
+</main>
+<script>
+(function () {
+  var chips = document.querySelectorAll('.chips button'), tiles = document.querySelectorAll('#tiles .tile');
+  function show(k) {
+    chips.forEach(function (c) { c.classList.toggle('on', c.dataset.k === k); });
+    tiles.forEach(function (t) { t.hidden = !(k === 'all' || t.dataset.kind === k); });
+  }
+  chips.forEach(function (c) { c.addEventListener('click', function () { history.replaceState(null, '', c.dataset.k === 'all' ? 'shop.html' : '#' + c.dataset.k); show(c.dataset.k); }); });
+  var h = location.hash.replace('#', ''); show(['art', 'set', 'card'].indexOf(h) > -1 ? h : 'all');
+  window.addEventListener('hashchange', function () { var k = location.hash.replace('#', ''); show(['art', 'set', 'card'].indexOf(k) > -1 ? k : 'all'); });
+})();
+</script>
+""" % (chips, "".join(tile(l) for l in ls)) + foot("")
+
+
+def home_page(ls):
+    def first(k):
+        return next((l for l in ls if kind(l) == k), ls[0])
+    ranges = "".join(
+        '<a class="range" href="shop.html#%s"><span class="ph"><img src="%s" alt="" loading="lazy"></span><span class="rn">%s</span><span class="rc">%d pieces</span></a>'
+        % (k, html.escape(first(k)["images"][0].get("url_570xN") or first(k)["images"][0]["url_fullxfull"]), v,
+           sum(1 for l in ls if kind(l) == k)) for k, v in KINDS.items())
+    newest = "".join(tile(l) for l in [l for l in ls if kind(l) != "card"][:8])
+    return head("Mirrors Fine Art · fine art photography by Carolina & Alan",
+                "Fine art photography by Carolina & Alan, Sydney: printable wall art, print sets and greeting cards.", "") + """
+<main>
+  <section class="hero">
+    <img src="images/peru-mountains.jpg" alt="Black and white panorama of the Andes in Peru under clouds">
+    <div class="hero-text">
+      <p class="eyebrow">Fine art photography · Sydney</p>
+      <h1>Quiet places,<br><em>printed for your walls.</em></h1>
+      <a class="btn light" href="shop.html">Shop the collection</a>
+    </div>
+  </section>
+
+  <section class="intro" id="about">
+    <h2>About us</h2>
+    <div>
+      <p>We are Carolina &amp; Alan, photographers based in Sydney. We travel for the light: the high Andes of Peru and Bolivia, the salt flats of the altiplano, the coasts and forests closer to home. Every image in the shop is one we made ourselves.</p>
+      <p>Our prints are instant downloads, prepared at 300 DPI in a full range of sizes, so you can print them at home or at a local print shop and frame them your way. Our greeting cards come ready to print and fold.</p>
+    </div>
+  </section>
+
+  <section class="ranges">%s</section>
+
+  <section class="newest">
+    <div class="sec-head"><h2>New work</h2><a href="shop.html">View all</a></div>
+    <div class="tiles">%s</div>
+  </section>
+
+  <section class="gallery">
+    <figure><img src="images/machu-picchu.jpg" alt="Machu Picchu guardhouse in morning light" loading="lazy"><figcaption>Machu Picchu, Peru</figcaption></figure>
+    <figure><img src="images/bolivia-volcano.jpg" alt="A volcano above the salt flat in Bolivia" loading="lazy"><figcaption>The altiplano, Bolivia</figcaption></figure>
+    <figure><img src="images/milford-sound.jpg" alt="Milford Sound, New Zealand" loading="lazy"><figcaption>Milford Sound, New Zealand</figcaption></figure>
+    <figure><img src="images/pier.jpg" alt="A pier reflected in still water" loading="lazy"><figcaption>Still water at the pier</figcaption></figure>
+  </section>
+</main>
+""" % (ranges, newest) + foot("")
+
+
+def privacy_page():
+    return head("Privacy · Mirrors Fine Art", "Privacy at Mirrors Fine Art.", "") + """
+<main class="prose">
+  <h1>Privacy</h1>
+  <p class="muted">Last updated 8 October 2026.</p>
+  <h2>This website</h2>
+  <p>This site shows our photographs and links to our Etsy shop. It has no forms, no accounts, no cookies and no analytics, and it collects no personal information.</p>
+  <h2>Our Pinterest app</h2>
+  <p>We use a small private app, for our own Pinterest account only, to post pins of our own Etsy listings: our photographs, with a title, a description and a link to the listing. The app reads our boards so each pin goes to the right one.</p>
+  <ul>
+    <li>It acts only on our own Pinterest account, with the access we grant it.</li>
+    <li>It does not read, collect or store anyone else's information.</li>
+    <li>Its access token is kept on our own computer and is never shared or sold.</li>
+    <li>We can remove its access at any time in Pinterest's settings.</li>
+  </ul>
+  <h2>Buying from us</h2>
+  <p>Purchases happen on Etsy, under <a href="https://www.etsy.com/legal/privacy/">Etsy's privacy policy</a>. We see only what Etsy shares with sellers to complete an order.</p>
+  <h2>Contact</h2>
+  <p>Message us through our <a href="%s">Etsy shop</a>.</p>
+</main>
+""" % SHOP + foot("")
 
 
 def feed(ls, path):
@@ -158,15 +367,18 @@ def feed(ls, path):
         w.writerow(["id", "title", "description", "link", "image_link", "additional_image_link",
                     "price", "availability", "condition", "brand", "product_type"])
         for l in ls:
-            if not l["images"]:
-                continue
             amt, cur = price(l)
             desc = re.sub(r"\s+", " ", plain(l.get("description")))[:9900]
-            w.writerow([l["listing_id"], html.unescape(l["title"])[:500], desc,
+            w.writerow([l["listing_id"], product_title(l)[:500], desc,
                         "%s/p/%s.html" % (BASE, l["listing_id"]),
                         l["images"][0]["url_fullxfull"],
                         ",".join(m["url_fullxfull"] for m in l["images"][1:6]),
-                        "%.2f %s" % (amt, cur), "in stock", "new", "Mirrors Fine Art", kind(l)])
+                        "%.2f %s" % (amt, cur), "in stock", "new", "Mirrors Fine Art", KINDS[kind(l)]])
+
+
+def write(path, text):
+    with open(os.path.join(SITE, path), "w", encoding="utf-8") as fh:
+        fh.write(text)
 
 
 def main():
@@ -175,13 +387,13 @@ def main():
     shutil.rmtree(pdir, ignore_errors=True)
     os.makedirs(pdir)
     for l in ls:
-        with open(os.path.join(pdir, "%s.html" % l["listing_id"]), "w", encoding="utf-8") as fh:
-            fh.write(page(l))
-    with open(os.path.join(SITE, "shop.html"), "w", encoding="utf-8") as fh:
-        fh.write(shop_page(ls))
+        same = [x for x in ls if kind(x) == kind(l) and x is not l][:4]
+        write(os.path.join("p", "%s.html" % l["listing_id"]), product_page(l, same))
+    write("shop.html", shop_page(ls))
+    write("index.html", home_page(ls))
+    write("privacy.html", privacy_page())
     feed(ls, os.path.join(SITE, "catalog.csv"))
-    print("%d listings: %d pages, shop.html, catalog.csv (%d with photos)"
-          % (len(ls), len(ls), sum(1 for l in ls if l["images"])))
+    print("%d listings: %d pages, index, shop, privacy, catalog.csv" % (len(ls), len(ls)))
 
 
 if __name__ == "__main__":
