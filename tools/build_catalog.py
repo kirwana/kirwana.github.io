@@ -32,6 +32,11 @@ FONTS = ('<link rel="preconnect" href="https://fonts.googleapis.com">'
 sys.path.insert(0, os.path.expanduser("~/Projects/etsy/print-templates"))
 import etsy_api as E  # noqa: E402
 
+# the stylesheet's address changes with its contents, so a browser never
+# pairs a new page with an old stylesheet it kept from an earlier visit
+import hashlib  # noqa: E402
+CSS_V = hashlib.sha1(open(os.path.join(SITE, "style.css"), "rb").read()).hexdigest()[:8]
+
 KINDS = {"art": "Wall art", "set": "Wall art sets", "card": "Greeting cards"}
 
 
@@ -143,7 +148,7 @@ def head(title, desc, root, extra=""):
 <title>%s</title>
 <meta name="description" content="%s">
 %s
-<link rel="stylesheet" href="%sstyle.css">
+<link rel="stylesheet" href="%sstyle.css?v=%s">
 %s
 </head>
 <body>
@@ -160,7 +165,7 @@ def head(title, desc, root, extra=""):
     </nav>
   </div>
 </header>
-""" % (VERIFY, html.escape(title), html.escape(desc), FONTS, root, extra,
+""" % (VERIFY, html.escape(title), html.escape(desc), FONTS, root, CSS_V, extra,
        root, root, root, root, root, root, SHOP)
 
 
