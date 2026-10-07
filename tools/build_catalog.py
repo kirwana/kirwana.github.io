@@ -27,8 +27,7 @@ SHOP = "https://www.etsy.com/shop/MirrorsFineArt"
 VERIFY = '<meta name="p:domain_verify" content="db7d2a24295a67bc265e4a4397112539"/>'
 FONTS = ('<link rel="preconnect" href="https://fonts.googleapis.com">'
          '<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>'
-         '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1'
-         '&family=Manrope:wght@400;500;600&display=swap">')
+         '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,100..900&display=swap">')
 sys.path.insert(0, os.path.expanduser("~/Projects/etsy/print-templates"))
 import etsy_api as E  # noqa: E402
 
@@ -359,7 +358,7 @@ def home_page(ls):
     <img src="images/peru-mountains.jpg" alt="Black and white panorama of the Andes in Peru under clouds">
     <div class="hero-text">
       <p class="eyebrow">Fine art photography · Sydney</p>
-      <h1>Quiet places,<br><em>printed for your walls.</em></h1>
+      <h1>Quiet places,<br>printed for your walls.</h1>
       <a class="btn light" href="shop.html">Shop the collection</a>
     </div>
   </section>
