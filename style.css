@@ -31,3 +31,16 @@ footer p { margin: 0; }
 .prose { max-width: 720px; padding-block: 56px 72px; }
 .prose p, .prose li { color: var(--ink); }
 .prose ul { padding-left: 20px; }
+.shop { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 220px), 1fr)); gap: 24px; padding-block: 16px 56px; }
+.card { display: grid; gap: 6px; text-decoration: none; color: var(--ink); font-size: 14px; }
+.card img { aspect-ratio: 1; object-fit: cover; }
+.card b { font-weight: 600; }
+.product { padding-block: 40px 56px; display: grid; gap: 20px; }
+.product-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 380px), 1fr)); gap: 36px; align-items: start; }
+.photos { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.photos .main { grid-column: 1 / -1; }
+.info { display: grid; gap: 10px; min-width: 0; }
+.info h1 { font-size: clamp(28px, 4vw, 40px); }
+.price { font-size: 22px; margin: 0; }
+.kind { color: var(--muted); margin: 0; }
+.desc p { color: var(--muted); font-size: 15px; }
