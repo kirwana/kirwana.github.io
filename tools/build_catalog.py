@@ -199,22 +199,48 @@ def tile(l, root=""):
 
 # ------------------------------------------------------------------ pages
 
+def sections(text):
+    """The description as (story, [(heading, html)]): the photograph's own story
+    shown, everything under an ALL-CAPS heading folded away, and the opening
+    note about the photograph moved under 'About the photograph'."""
+    story, folds, cur = [], [], None
+    for block in plain(text).split("\n\n"):
+        lines = [x for x in block.split("\n")]
+        if lines and re.fullmatch(r"[A-Z0-9 &'’/,.:()-]{4,}", lines[0].strip()) and not re.search(r"[a-z]", lines[0]):
+            cur = [lines[0].strip().capitalize(), []]
+            folds.append(cur)
+            lines = lines[1:]
+        body = [x for x in lines if x.strip()]
+        if not body:
+            continue
+        if all(re.match(r"\s*[-•*✓✔]", x) for x in body):
+            h = "<ul>%s</ul>" % "".join("<li>%s</li>" % html.escape(re.sub(r"^\s*[-•*✓✔]\s*", "", x)) for x in body)
+        else:
+            h = "<p>%s</p>" % "<br>".join(html.escape(x) for x in body)
+        if cur is not None:
+            cur[1].append(h)
+        elif not story and re.match(r"(An original photograph|Original photographs)", body[0]):
+            folds.insert(0, ["About the photograph", [h]])
+        else:
+            story.append(h)
+    return "".join(story), [(t, "".join(x)) for t, x in folds if x]
+
+
 def product_page(l, related):
     name, n, rest = names(l)
     k = kind(l)
-    photos = [m["url_fullxfull"] for m in l["images"][:8]]
-    smalls = [m.get("url_570xN") or m["url_fullxfull"] for m in l["images"][:8]]
-    thumbs = "".join('<button type="button" data-full="%s"%s><img src="%s" alt="" loading="lazy"></button>'
-                     % (html.escape(f), ' class="on"' if i == 0 else "", html.escape(s))
-                     for i, (f, s) in enumerate(zip(photos, smalls)))
-    facts = {"art": ["Instant digital download", "High-resolution JPG files at 300 DPI",
-                     "Sizes in inches and centimetres", "Print at home or at any print shop"],
-             "set": ["Instant digital download", "%s matched prints, one file each" % (n or "Several"),
-                     "High-resolution JPG files at 300 DPI", "Print at home or at any print shop"],
-             "card": ["Instant digital download", "Print at home on A4 or US Letter card",
-                      "Print-shop PDF with bleed included", "Cut and fold guide"]}[k]
+    photos = [m["url_fullxfull"] for m in l["images"][:10]]
+    smalls = [m.get("url_570xN") or m["url_fullxfull"] for m in l["images"][:10]]
+    thumbs = "".join('<button type="button" data-i="%d"%s aria-label="Photo %d"><img src="%s" alt="" loading="lazy"></button>'
+                     % (i, ' class="on"' if i == 0 else "", i + 1, html.escape(sm)) for i, sm in enumerate(smalls))
     sub = {"art": "Printable wall art", "set": "Set of %d prints" % n if n else "Print set",
            "card": "Printable greeting card"}[k]
+    notes = {"art": ["Instant download", "Print-ready at 300 DPI", "Secure checkout on Etsy"],
+             "set": ["Instant download, %s files" % (n or "matched"), "Print-ready at 300 DPI", "Secure checkout on Etsy"],
+             "card": ["Instant download", "Print at home or a print shop", "Secure checkout on Etsy"]}[k]
+    story, folds = sections(l.get("description"))
+    acc = "".join('<details%s><summary>%s</summary><div>%s</div></details>' % (" open" if i == 0 and t == "What you receive" else "",
+                  html.escape(t), body) for i, (t, body) in enumerate(folds))
     rel = "".join(tile(x, "../") for x in related)
     amt, cur = price(l)
     ld = {"@context": "https://schema.org", "@type": "Product", "name": product_title(l),
@@ -229,39 +255,60 @@ def product_page(l, related):
                 json.dumps(ld).replace("</", "<\\/")))
     return head("%s · Mirrors Fine Art" % name, plain(l.get("description"))[:155], "../", extra) + """
 <main class="product">
-  <p class="crumbs"><a href="../shop.html">Shop</a> / <a href="../shop.html#%(k)s">%(kname)s</a></p>
+  <nav class="crumbs" aria-label="Breadcrumb"><a href="../shop.html">Shop</a><span>/</span><a href="../shop.html#%(k)s">%(kname)s</a><span>/</span>%(name)s</nav>
   <div class="pgrid">
     <div class="viewer">
-      <div class="stage"><img id="main" src="%(main)s" alt="%(name)s"></div>
-      <div class="thumbs">%(thumbs)s</div>
+      <div class="stage">
+        <button type="button" class="zoom" aria-label="View larger"><img id="main" src="%(main)s" alt="%(name)s"></button>
+        <button type="button" class="nav prev" aria-label="Previous photo">‹</button>
+        <button type="button" class="nav next" aria-label="Next photo">›</button>
+        <span class="count"><b id="ci">1</b> / %(np)d</span>
+      </div>
+      <div class="strip">%(thumbs)s</div>
     </div>
     <div class="buy">
-      <p class="eyebrow">%(sub)s%(rest)s</p>
+      <p class="eyebrow">%(sub)s</p>
       <h1>%(name)s</h1>
+      %(where)s
       <p class="price">%(price)s</p>
-      <a class="btn" href="%(etsy)s">Buy on Etsy</a>
-      <p class="secure">Secure checkout and instant download through Etsy.</p>
-      <ul class="facts">%(facts)s</ul>
-      <div class="desc">%(desc)s</div>
+      <a class="btn wide" href="%(etsy)s">Buy on Etsy</a>
+      <ul class="notes">%(notes)s</ul>
+      <div class="story">%(story)s</div>
+      <div class="acc">%(acc)s</div>
     </div>
   </div>
   <section class="more">
-    <h2>More like this</h2>
+    <div class="sec-head"><h2>More like this</h2><a href="../shop.html#%(k)s">See all %(kname_l)s</a></div>
     <div class="tiles">%(rel)s</div>
   </section>
 </main>
+<dialog id="lb" aria-label="Photo"><button type="button" class="lb-close" aria-label="Close">×</button><img id="lbimg" src="" alt="%(name)s"></dialog>
 <script>
-document.querySelectorAll('.thumbs button').forEach(function (b) {
-  b.addEventListener('click', function () {
-    document.getElementById('main').src = b.dataset.full;
-    document.querySelectorAll('.thumbs button').forEach(function (x) { x.classList.toggle('on', x === b); });
-  });
-});
+(function () {
+  var photos = %(photos)s, i = 0, main = document.getElementById('main'), ci = document.getElementById('ci'),
+      thumbs = document.querySelectorAll('.strip button'), lb = document.getElementById('lb'), lbimg = document.getElementById('lbimg');
+  function show(n) {
+    i = (n + photos.length) %% photos.length;
+    main.src = photos[i]; ci.textContent = i + 1;
+    thumbs.forEach(function (t, k) { t.classList.toggle('on', k === i); });
+    if (thumbs[i]) thumbs[i].scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    if (lb.open) lbimg.src = photos[i];
+  }
+  thumbs.forEach(function (t) { t.addEventListener('click', function () { show(+t.dataset.i); }); });
+  document.querySelector('.prev').addEventListener('click', function () { show(i - 1); });
+  document.querySelector('.next').addEventListener('click', function () { show(i + 1); });
+  document.querySelector('.zoom').addEventListener('click', function () { lbimg.src = photos[i]; lb.showModal(); });
+  document.querySelector('.lb-close').addEventListener('click', function () { lb.close(); });
+  lb.addEventListener('click', function (e) { if (e.target === lb) lb.close(); });
+  document.addEventListener('keydown', function (e) { if (e.key === 'ArrowLeft') show(i - 1); if (e.key === 'ArrowRight') show(i + 1); });
+  if (photos.length < 2) document.querySelectorAll('.nav, .count, .strip').forEach(function (x) { x.hidden = true; });
+})();
 </script>
-""" % {"k": k, "kname": KINDS[k], "main": html.escape(photos[0]), "name": html.escape(name), "thumbs": thumbs,
-       "sub": html.escape(sub), "rest": (" · " + html.escape(rest)) if rest else "", "price": money(l),
-       "etsy": html.escape(l["url"].split("?")[0]), "facts": "".join("<li>%s</li>" % html.escape(f) for f in facts),
-       "desc": desc_html(l.get("description")), "rel": rel} + foot("../")
+""" % {"k": k, "kname": KINDS[k], "kname_l": KINDS[k].lower(), "main": html.escape(photos[0]), "name": html.escape(name),
+       "np": len(photos), "thumbs": thumbs, "sub": html.escape(sub),
+       "where": ('<p class="where">%s</p>' % html.escape(rest)) if rest else "", "price": money(l),
+       "etsy": html.escape(l["url"].split("?")[0]), "notes": "".join("<li>%s</li>" % html.escape(x) for x in notes),
+       "story": story, "acc": acc, "rel": rel, "photos": json.dumps(photos)} + foot("../")
 
 
 def shop_page(ls):
