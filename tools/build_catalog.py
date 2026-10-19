@@ -36,7 +36,7 @@ import etsy_api as E  # noqa: E402
 import hashlib  # noqa: E402
 CSS_V = hashlib.sha1(open(os.path.join(SITE, "style.css"), "rb").read()).hexdigest()[:8]
 
-KINDS = {"art": "Wall art", "set": "Wall art sets", "card": "Greeting cards"}
+KINDS = {"art": "Wall art", "set": "Wall art sets"}       # greeting cards are no longer sold
 
 
 # ------------------------------------------------------------------ Etsy
@@ -59,7 +59,7 @@ def listings():
             imgs[l["listing_id"]] = sorted(l.get("images") or [], key=lambda m: m.get("rank", 99))
     for l in out:
         l["images"] = imgs.get(l["listing_id"], [])
-    return [l for l in out if l["images"]]
+    return [l for l in out if l["images"] and kind(l) in KINDS]
 
 
 def price(l):
@@ -158,14 +158,13 @@ def head(title, desc, root, extra=""):
       <a href="%sshop.html">Shop</a>
       <a href="%sshop.html#art">Wall art</a>
       <a href="%sshop.html#set">Sets</a>
-      <a href="%sshop.html#card">Cards</a>
       <a href="%sindex.html#about">About</a>
       <a class="etsy" href="%s">Etsy</a>
     </nav>
   </div>
 </header>
 """ % (VERIFY, html.escape(title), html.escape(desc), FONTS, root, CSS_V, extra,
-       root, root, root, root, root, root, SHOP)
+       root, root, root, root, root, SHOP)
 
 
 def foot(root):
@@ -173,11 +172,11 @@ def foot(root):
   <div class="cols">
     <div>
       <p class="mark">Mirrors <em>Fine Art</em></p>
-      <p>Fine art photography by Carolina &amp; Alan, Sydney. Printable wall art and greeting cards, sold through Etsy as instant downloads.</p>
+      <p>Fine art photography by Carolina &amp; Alan, Sydney. Printable wall art and wall art collections, sold through Etsy as instant downloads.</p>
     </div>
     <div>
       <p class="label">Shop</p>
-      <a href="%sshop.html#art">Wall art</a><a href="%sshop.html#set">Wall art sets</a><a href="%sshop.html#card">Greeting cards</a>
+      <a href="%sshop.html#art">Wall art</a><a href="%sshop.html#set">Wall art sets</a>
     </div>
     <div>
       <p class="label">About</p>
@@ -188,7 +187,7 @@ def foot(root):
 </footer>
 </body>
 </html>
-""" % (root, root, root, root, SHOP, root)
+""" % (root, root, root, SHOP, root)
 
 
 def tile(l, root=""):
@@ -319,11 +318,11 @@ def shop_page(ls):
     counts = {k: sum(1 for l in ls if kind(l) == k) for k in KINDS}
     chips = '<button type="button" data-k="all" class="on">All <span>%d</span></button>' % len(ls) + "".join(
         '<button type="button" data-k="%s">%s <span>%d</span></button>' % (k, v, counts[k]) for k, v in KINDS.items())
-    return head("Shop · Mirrors Fine Art", "Printable wall art, print sets and greeting cards by Mirrors Fine Art.", "") + """
+    return head("Shop · Mirrors Fine Art", "Printable wall art and wall art collections by Mirrors Fine Art.", "") + """
 <main class="shop">
   <div class="shop-head">
     <h1>Shop</h1>
-    <p>Printable wall art, matched print sets and greeting cards. Every piece is an instant download, bought securely on Etsy.</p>
+    <p>Printable wall art and matched wall art collections. Every piece is an instant download, bought securely on Etsy.</p>
     <div class="chips" role="tablist">%s</div>
   </div>
   <div class="tiles" id="tiles">%s</div>
@@ -336,8 +335,8 @@ def shop_page(ls):
     tiles.forEach(function (t) { t.hidden = !(k === 'all' || t.dataset.kind === k); });
   }
   chips.forEach(function (c) { c.addEventListener('click', function () { history.replaceState(null, '', c.dataset.k === 'all' ? 'shop.html' : '#' + c.dataset.k); show(c.dataset.k); }); });
-  var h = location.hash.replace('#', ''); show(['art', 'set', 'card'].indexOf(h) > -1 ? h : 'all');
-  window.addEventListener('hashchange', function () { var k = location.hash.replace('#', ''); show(['art', 'set', 'card'].indexOf(k) > -1 ? k : 'all'); });
+  var h = location.hash.replace('#', ''); show(['art', 'set'].indexOf(h) > -1 ? h : 'all');
+  window.addEventListener('hashchange', function () { var k = location.hash.replace('#', ''); show(['art', 'set'].indexOf(k) > -1 ? k : 'all'); });
 })();
 </script>
 """ % (chips, "".join(tile(l) for l in ls)) + foot("")
@@ -352,7 +351,7 @@ def home_page(ls):
            sum(1 for l in ls if kind(l) == k)) for k, v in KINDS.items())
     newest = "".join(tile(l) for l in [l for l in ls if kind(l) != "card"][:8])
     return head("Mirrors Fine Art · fine art photography by Carolina & Alan",
-                "Fine art photography by Carolina & Alan, Sydney: printable wall art, print sets and greeting cards.", "") + """
+                "Fine art photography by Carolina & Alan, Sydney: printable wall art and wall art collections.", "") + """
 <main>
   <section class="hero">
     <img src="images/peru-mountains.jpg" alt="Black and white panorama of the Andes in Peru under clouds">
@@ -367,7 +366,7 @@ def home_page(ls):
     <h2>About us</h2>
     <div>
       <p>We are Carolina &amp; Alan, photographers based in Sydney. We travel for the light: the high Andes of Peru and Bolivia, the salt flats of the altiplano, the coasts and forests closer to home. Every image in the shop is one we made ourselves.</p>
-      <p>Our prints are instant downloads, prepared at 300 DPI in a full range of sizes, so you can print them at home or at a local print shop and frame them your way. Our greeting cards come ready to print and fold.</p>
+      <p>Our prints are instant downloads, prepared at 300 DPI in a full range of sizes, so you can print them at home or at a local print shop and frame them your way.</p>
     </div>
   </section>
 
