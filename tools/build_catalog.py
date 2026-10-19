@@ -37,6 +37,8 @@ import hashlib  # noqa: E402
 CSS_V = hashlib.sha1(open(os.path.join(SITE, "style.css"), "rb").read()).hexdigest()[:8]
 
 KINDS = {"art": "Wall art", "set": "Wall art sets"}       # greeting cards are no longer sold
+# the listing whose photo fronts each range on the home page (else the newest)
+RANGE_PHOTO = {"art": "4579479922"}   # Machu Picchu
 
 
 # ------------------------------------------------------------------ Etsy
@@ -344,7 +346,8 @@ def shop_page(ls):
 
 def home_page(ls):
     def first(k):
-        return next((l for l in ls if kind(l) == k), ls[0])
+        return next((l for l in ls if str(l["listing_id"]) == RANGE_PHOTO.get(k)), None) or \
+            next((l for l in ls if kind(l) == k), ls[0])
     ranges = "".join(
         '<a class="range" href="shop.html#%s"><span class="ph"><img src="%s" alt="" loading="lazy"></span><span class="rn">%s</span><span class="rc">%d pieces</span></a>'
         % (k, html.escape(first(k)["images"][0].get("url_570xN") or first(k)["images"][0]["url_fullxfull"]), v,
