@@ -317,8 +317,6 @@ def product_page(l, related):
 
 
 def shop_page(ls):
-    # 3D photos after the flat prints; otherwise Etsy's order (sorted() keeps it)
-    ls = sorted(ls, key=lambda l: bool(re.search(r"\b3D\b", l.get("title") or "")))
     counts = {k: sum(1 for l in ls if kind(l) == k) for k in KINDS}
     chips = '<button type="button" data-k="all" class="on">All <span>%d</span></button>' % len(ls) + "".join(
         '<button type="button" data-k="%s">%s <span>%d</span></button>' % (k, v, counts[k]) for k, v in KINDS.items())
@@ -437,7 +435,8 @@ def write(path, text):
 
 
 def main():
-    ls = listings()
+    # everywhere on the site, 3D photos come after the flat prints; otherwise Etsy's order
+    ls = sorted(listings(), key=lambda l: bool(re.search(r"\b3D\b", l.get("title") or "")))
     pdir = os.path.join(SITE, "p")
     shutil.rmtree(pdir, ignore_errors=True)
     os.makedirs(pdir)
