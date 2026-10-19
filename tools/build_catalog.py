@@ -4,7 +4,7 @@ The whole site, built from the live Etsy listings: the home page, the shop,
 a page per listing, the privacy page, and catalog.csv for Pinterest.
 
 Pinterest takes a catalogue only from the website the account has claimed:
-every product's link has to be on kirwana.github.io. So each Etsy listing
+every product's link has to be on www.mirrorsphoto.com (this site, served from kirwana.github.io). So each Etsy listing
 gets a page here (p/<listing id>.html: its photos, title, price and a Buy on
 Etsy button), and catalog.csv is the feed Pinterest reads.
 
@@ -22,7 +22,7 @@ import shutil
 import sys
 
 SITE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-BASE = "https://kirwana.github.io"
+BASE = "https://www.mirrorsphoto.com"
 SHOP = "https://www.etsy.com/shop/MirrorsFineArt"
 VERIFY = '<meta name="p:domain_verify" content="db7d2a24295a67bc265e4a4397112539"/>'
 FONTS = ('<link rel="preconnect" href="https://fonts.googleapis.com">'
