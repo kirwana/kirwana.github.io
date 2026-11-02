@@ -4,6 +4,9 @@
 # (~/Library/LaunchAgents/com.kirwana.mirrors-catalog.plist); log in tools/sync.log.
 cd "$(dirname "$0")/.." || exit 1
 echo "== $(date '+%Y-%m-%d %H:%M')"
+# the Mirrors Studio shop (www.mirrorsphoto.com/art, its own repo) first: this
+# script stops early when the print shop has no change
+/bin/bash "$HOME/Projects/art/tools/sync.sh" || echo "art sync failed"
 /usr/bin/git pull -q --rebase || echo "pull failed; building on what is here"
 /usr/bin/python3 tools/build_catalog.py || { echo "build failed"; exit 1; }
 if [ -z "$(/usr/bin/git status --porcelain -- p shop.html index.html privacy.html catalog.csv)" ]; then
