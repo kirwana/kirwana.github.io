@@ -20,16 +20,17 @@
 <body>
 <main>
   <h1>CloudScapes privacy</h1>
-  <p class="muted">For the CloudScapes watch face and the CloudScapes App for Garmin watches, by JumpHour. Last updated 6 November 2026.</p>
+  <p class="muted">For the CloudScapes watch face and the CloudScapes App for Garmin watches, by JumpHour. Last updated 6 November 2026 (app pairing).</p>
 
   <h2>What is sent</h2>
-  <p>To show the forecast, the watch sends its location, rounded to two decimal places (about 1 km), to the CloudScapes server. The request goes through the Garmin Connect app on your phone. Nothing else is sent: no name, account, email, device ID or health data. As with any internet request, the server also sees the network address it came from.</p>
+  <p>To show the forecast, the watch sends its location, rounded to two decimal places (about 1 km), to the CloudScapes server. The request goes through the Garmin Connect app on your phone. It also sends the random device identifier Garmin gives each app (a different one for the face and for the app, not linked to your Garmin account), so the server can tell the paid face and a paired app from anyone else. Nothing else is sent: no name, account, email or health data. As with any internet request, the server also sees the network address it came from.</p>
 
   <h2>What the server does with it</h2>
   <ul>
     <li>It rounds the location again, to about 11 km, and asks <a href="https://open-meteo.com/en/terms">Open-Meteo</a> for the weather forecast and <a href="https://www.worldtides.info/">WorldTides</a> for the tides at that rounded spot.</li>
     <li>It keeps the forecast for that 11 km area in memory for up to 30 minutes (tides up to 6 hours), so nearby requests share it, then forgets it.</li>
-    <li>The server runs on Microsoft Azure (Australia East). Azure's standard request logs, which include the rounded location, are kept for up to 90 days for fixing problems, then deleted automatically.</li>
+    <li>To pair the app with the face, the server keeps a scrambled (one-way hashed) copy of each device identifier, the 6-digit code it gave the face, and when it was last used. It cannot be turned back into the identifier.</li>
+    <li>The server runs on Microsoft Azure (Australia East). Azure's standard request logs, which include the rounded location and the device identifier, are kept for up to 90 days for fixing problems, then deleted automatically.</li>
   </ul>
 
   <h2>What we don't do</h2>
