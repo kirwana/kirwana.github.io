@@ -425,7 +425,7 @@ def feed(ls, path):
             w.writerow([l["listing_id"], product_title(l)[:500], desc,
                         "%s/p/%s.html" % (BASE, l["listing_id"]),
                         l["images"][0]["url_fullxfull"],
-                        ",".join(m["url_fullxfull"] for m in l["images"][1:6]),
+                        "",     # the print alone: no room mockups or size sheets for Pinterest to pick
                         "%.2f %s" % (amt, cur), "in stock", "new", "Mirrors Fine Art", KINDS[kind(l)]])
 
 
