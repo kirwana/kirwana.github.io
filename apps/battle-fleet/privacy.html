@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Battle Fleet Privacy</title>
+<meta name="description" content="Privacy policy for the Battle Fleet watch face and Battle Fleet App for Garmin watches.">
+<style>
+  :root { --bg: #ffffff; --fg: #1d1f24; --muted: #5c6270; --link: #1a6fb3; }
+  @media (prefers-color-scheme: dark) { :root { --bg: #0c0d10; --fg: #e9eaee; --muted: #a0a6b2; --link: #6fb3ee; } }
+  body { margin: 0; background: var(--bg); color: var(--fg); font: 17px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+  main { max-width: 680px; margin: 0 auto; padding: 40px 16px 64px; }
+  h1 { font-size: 30px; margin: 0 0 4px; }
+  h2 { font-size: 20px; margin: 32px 0 8px; }
+  .muted { color: var(--muted); }
+  a { color: var(--link); }
+  ul { padding-left: 22px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Battle Fleet privacy</h1>
+  <p class="muted">For the Battle Fleet watch face and the Battle Fleet App for Garmin watches, by JumpHour. Last updated 11 November 2026.</p>
+
+  <h2>What is sent</h2>
+  <p>To play against your friends, the app sends the random device identifier Garmin gives each app (not linked to your Garmin account), the animal and colour you picked, and your shots. When you add a friend with TOGETHER, it also sends where the watch last was, rounded to about 100 m, so the server can match the two watches pressing at the same moment. Requests go through the Garmin Connect app on your phone. Nothing else is sent: no name, account, email or health data. As with any internet request, the server also sees the network address it came from.</p>
+
+  <h2>What the server keeps</h2>
+  <ul>
+    <li>Your player: a scrambled (one-way hashed) id made from the device identifier, your animal and colour.</li>
+    <li>Your friends (as those scrambled ids) and your games: each fleet and every shot.</li>
+    <li>A TOGETHER press for under a minute, with its rounded position, then it is deleted. A friend code until it is used or a day has passed.</li>
+    <li>For the 7-day free trial and for unlocking with the face: a scrambled copy of the app's and the face's identifiers, the date first seen and the 6-digit code.</li>
+    <li>Your friends see only your animal and colour, never anything else about you.</li>
+    <li>The server runs on Microsoft Azure (Australia East). Azure's standard request logs are kept for up to 90 days for fixing problems, then deleted automatically.</li>
+  </ul>
+
+  <h2>What we don't do</h2>
+  <p>We don't sell or share anything, and the rounded position is used only to match two watches adding each other. There is no tracking, advertising or analytics in the watch face or the app.</p>
+
+  <h2>On your watch</h2>
+  <p>Your animal, your friends list and your games are kept on the watch, in the app's and the face's own storage, until you remove them from the watch.</p>
+
+  <h2>Contact</h2>
+  <p>Questions: <a href="mailto:kirwana22@gmail.com">kirwana22@gmail.com</a></p>
+</main>
+</body>
+</html>
